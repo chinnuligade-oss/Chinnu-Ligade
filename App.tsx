@@ -20,6 +20,7 @@ const App: React.FC = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiAdvice, setAiAdvice] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Form State
   const [formData, setFormData] = useState({
@@ -34,6 +35,16 @@ const App: React.FC = () => {
     const data = generateMockData(60);
     setTransactions(data);
   }, []);
+
+  const filteredTransactions = useMemo(() => {
+    if (!searchQuery) return transactions;
+    const lowerQuery = searchQuery.toLowerCase();
+    return transactions.filter(t => 
+      t.description.toLowerCase().includes(lowerQuery) || 
+      t.category.toLowerCase().includes(lowerQuery) ||
+      t.amount.toString().includes(lowerQuery)
+    );
+  }, [transactions, searchQuery]);
 
   const stats = useMemo(() => {
     const totalIncome = transactions
@@ -66,10 +77,12 @@ const App: React.FC = () => {
       id: Date.now().toString(),
       amount: Number(formData.amount),
       category: formData.category,
-      type: formData.type,
+      type: TransactionType.EXPENSE, // Default for new manual adds
       description: formData.description || 'No description',
       date: formData.date
     };
+    // Correct type based on current selection in form UI
+    newTransaction.type = formData.type;
 
     setTransactions([newTransaction, ...transactions]);
     setFormData({
@@ -88,16 +101,49 @@ const App: React.FC = () => {
       totalIncome: stats.totalIncome,
       totalExpense: stats.totalExpense,
       balance: stats.balance,
-      topExpenseCategory: stats.expenseCategories[0]?.name
+      topExpenseCategory: stats.expenseCategories[0]?.name,
+      period: 'Last 60 Days'
     });
     setAiAdvice(advice);
     setIsAiLoading(false);
+  };
+
+  const handleExportCSV = () => {
+    const headers = ['Date', 'Type', 'Category', 'Description', 'Amount'];
+    const rows = filteredTransactions.map(t => [
+      t.date,
+      t.type,
+      t.category,
+      `"${t.description.replace(/"/g, '""')}"`,
+      t.amount.toFixed(2)
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(e => e.join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `FinVue_Audit_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
     <Layout activeView={activeView} setView={setActiveView} theme={theme} toggleTheme={handleToggleTheme}>
       {activeView === 'DASHBOARD' && (
         <div className="space-y-6">
+          {/* Print Only Header */}
+          <div className="hidden print:block mb-8 text-center border-b pb-4">
+             <h1 className="text-3xl font-black text-indigo-600">FinVue Financial Audit Report</h1>
+             <p className="text-slate-500 font-medium">Reporting Period: Last 60 Days | Generated: {new Date().toLocaleDateString()}</p>
+          </div>
+
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <SummaryCard title="Current Balance" value={stats.balance} icon="💰" color="text-indigo-500" isDark={theme.isDark} />
@@ -107,10 +153,10 @@ const App: React.FC = () => {
           </div>
 
           {/* AI Banner */}
-          <div className={`p-6 rounded-2xl border flex flex-col md:flex-row gap-6 items-center ${theme.isDark ? 'bg-indigo-950/30 border-indigo-900/50' : 'bg-indigo-50 border-indigo-200'}`}>
-            <div className="text-3xl">🤖</div>
+          <div className={`p-6 rounded-2xl border flex flex-col md:flex-row gap-6 items-center ${theme.isDark ? 'bg-indigo-950/30 border-indigo-900/50' : 'bg-indigo-50 border-indigo-200 shadow-sm'}`}>
+            <div className="text-3xl print:hidden">🤖</div>
             <div className="flex-1">
-              <h4 className="font-bold text-lg mb-1">FinVue Intelligence</h4>
+              <h4 className="font-bold text-lg mb-1">AI Executive Summary</h4>
               {aiAdvice ? (
                 <p className="text-sm opacity-90 leading-relaxed whitespace-pre-wrap">{aiAdvice}</p>
               ) : (
@@ -120,7 +166,7 @@ const App: React.FC = () => {
             <button 
               onClick={handleGetAiAdvice}
               disabled={isAiLoading}
-              className={`px-6 py-2.5 rounded-xl font-bold transition-all shadow-lg ${
+              className={`px-6 py-2.5 rounded-xl font-bold transition-all shadow-lg no-print ${
                 isAiLoading ? 'bg-slate-700 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/30'
               }`}
             >
@@ -138,7 +184,6 @@ const App: React.FC = () => {
              <WeeklyBarChart data={stats.daily} isDark={theme.isDark} />
              <SavingsRateGauge rate={stats.savingsRate} isDark={theme.isDark} />
 
-             {/* Placeholder for more granular analytics */}
              <div className={`p-6 rounded-2xl border flex flex-col justify-center items-center text-center ${theme.isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
                 <div className="text-4xl mb-4">🎯</div>
                 <h3 className="font-bold">Monthly Target</h3>
@@ -149,54 +194,85 @@ const App: React.FC = () => {
              </div>
 
              <div className={`p-6 rounded-2xl border flex flex-col justify-center items-center text-center ${theme.isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
-                <div className="text-4xl mb-4">📆</div>
-                <h3 className="font-bold">Next Bill Due</h3>
-                <p className="text-sm text-slate-500 mt-2">Rent & Utilities ($1,850.00) due in 4 days.</p>
-                <button className="mt-4 text-xs font-bold text-indigo-500 underline uppercase tracking-tighter">View Calendar</button>
-             </div>
-
-             <div className={`p-6 rounded-2xl border flex flex-col justify-center items-center text-center ${theme.isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
                 <div className="text-4xl mb-4">🏆</div>
                 <h3 className="font-bold">Fiscal Score</h3>
                 <div className="text-3xl font-black text-emerald-500 mt-2">785</div>
                 <p className="text-xs text-slate-500 mt-1 uppercase tracking-widest font-bold">Excellent</p>
+             </div>
+
+             <div className={`p-6 rounded-2xl border flex flex-col justify-center items-center text-center ${theme.isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+                <div className="text-4xl mb-4">📈</div>
+                <h3 className="font-bold">Projection</h3>
+                <p className="text-sm text-slate-500 mt-2">Based on current trends, your balance will grow by 12% next month.</p>
+                <button className="mt-4 text-xs font-bold text-indigo-500 underline uppercase tracking-tighter no-print">Full Forecast</button>
              </div>
           </div>
         </div>
       )}
 
       {activeView === 'TRANSACTIONS' && (
-        <div className={`rounded-2xl border overflow-hidden ${theme.isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
-          <table className="w-full text-left">
-            <thead className={`text-xs uppercase tracking-wider text-slate-500 ${theme.isDark ? 'bg-slate-800/50' : 'bg-slate-50'}`}>
-              <tr>
-                <th className="px-6 py-4 font-bold">Date</th>
-                <th className="px-6 py-4 font-bold">Category</th>
-                <th className="px-6 py-4 font-bold">Description</th>
-                <th className="px-6 py-4 font-bold text-right">Amount</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-              {transactions.map(t => (
-                <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                  <td className="px-6 py-4 text-sm font-medium">{t.date}</td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase ${
-                      t.type === TransactionType.INCOME 
-                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' 
-                        : 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400'
-                    }`}>
-                      {t.category}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm opacity-80">{t.description}</td>
-                  <td className={`px-6 py-4 text-sm font-bold text-right ${t.type === TransactionType.INCOME ? 'text-emerald-500' : 'text-rose-500'}`}>
-                    {t.type === TransactionType.INCOME ? '+' : '-'}${t.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </td>
+        <div className="space-y-4">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <h2 className="text-xl font-bold">History Log</h2>
+            <div className="flex gap-2 w-full md:w-auto">
+              <input 
+                type="text"
+                placeholder="Search transactions..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className={`flex-1 md:w-64 px-4 py-2 rounded-xl text-sm border focus:ring-2 focus:ring-indigo-500 outline-none transition-all ${
+                  theme.isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200'
+                }`}
+              />
+              <button 
+                onClick={handleExportCSV}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all border shrink-0 ${
+                  theme.isDark 
+                    ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-indigo-400' 
+                    : 'bg-white border-slate-200 hover:bg-slate-50 text-indigo-600 shadow-sm'
+                }`}
+              >
+                📥 Export
+              </button>
+            </div>
+          </div>
+          
+          <div className={`rounded-2xl border overflow-hidden ${theme.isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+            <table className="w-full text-left">
+              <thead className={`text-xs uppercase tracking-wider text-slate-500 ${theme.isDark ? 'bg-slate-800/50' : 'bg-slate-50'}`}>
+                <tr>
+                  <th className="px-6 py-4 font-bold">Date</th>
+                  <th className="px-6 py-4 font-bold">Category</th>
+                  <th className="px-6 py-4 font-bold">Description</th>
+                  <th className="px-6 py-4 font-bold text-right">Amount</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                {filteredTransactions.length > 0 ? filteredTransactions.map(t => (
+                  <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                    <td className="px-6 py-4 text-sm font-medium">{t.date}</td>
+                    <td className="px-6 py-4">
+                      <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase ${
+                        t.type === TransactionType.INCOME 
+                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' 
+                          : 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400'
+                      }`}>
+                        {t.category}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm opacity-80 truncate max-w-[200px]">{t.description}</td>
+                    <td className={`px-6 py-4 text-sm font-bold text-right ${t.type === TransactionType.INCOME ? 'text-emerald-500' : 'text-rose-500'}`}>
+                      {t.type === TransactionType.INCOME ? '+' : '-'}${t.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                )) : (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-12 text-center text-slate-500 italic">No transactions match your search.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -315,7 +391,16 @@ const App: React.FC = () => {
               </div>
 
               <div className="pt-6 border-t border-slate-200 dark:border-slate-800">
-                <button className="text-rose-500 font-bold hover:underline">Clear Local Cache & Reset Data</button>
+                <button 
+                  onClick={() => {
+                    if (confirm("Reset all 60 days of mock data? This cannot be undone.")) {
+                      setTransactions(generateMockData(60));
+                    }
+                  }}
+                  className="text-rose-500 font-bold hover:underline"
+                >
+                  Regenerate Mock Data
+                </button>
               </div>
             </div>
           </div>

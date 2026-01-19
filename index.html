@@ -23,19 +23,52 @@
         background: rgba(156, 163, 175, 0.5);
         border-radius: 10px;
       }
+
+      /* Print Optimization */
+      @media print {
+        aside, header, button, .no-print {
+          display: none !important;
+        }
+        main {
+          margin: 0 !important;
+          padding: 0 !important;
+          width: 100% !important;
+          height: auto !important;
+          overflow: visible !important;
+        }
+        .max-w-7xl {
+          max-width: 100% !important;
+        }
+        .grid {
+          display: block !important;
+        }
+        .grid > div {
+          margin-bottom: 2rem !important;
+          page-break-inside: avoid;
+          border: 1px solid #e2e8f0 !important;
+        }
+        body {
+          background: white !important;
+          color: black !important;
+        }
+        .text-indigo-500, .text-emerald-500, .text-rose-500 {
+          color: black !important;
+          font-weight: bold;
+        }
+      }
     </style>
-  <script type="importmap">
-{
-  "imports": {
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3",
-    "recharts": "https://esm.sh/recharts@^3.6.0",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "@google/genai": "https://esm.sh/@google/genai@^1.37.0"
-  }
-}
-</script>
-</head>
+    <script type="importmap">
+    {
+      "imports": {
+        "react/": "https://esm.sh/react@^19.2.3/",
+        "react": "https://esm.sh/react@^19.2.3",
+        "recharts": "https://esm.sh/recharts@^3.6.0",
+        "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+        "@google/genai": "https://esm.sh/@google/genai@^1.37.0"
+      }
+    }
+    </script>
+  </head>
   <body>
     <div id="root"></div>
   </body>
